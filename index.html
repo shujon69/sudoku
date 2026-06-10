@@ -1,0 +1,1076 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+<title>Mini Sudoku</title>
+<meta name="description" content="A fun mini sudoku game with 4x4, 5x5, and 6x6 grids">
+<meta name="theme-color" content="#10b981">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="MiniSudoku">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="manifest" href="manifest.json">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --primary:#10b981;--primary-light:#d1fae5;--primary-dark:#059669;
+  --bg:#fafaf9;--bg-white:#ffffff;--text:#1c1917;--text-muted:#78716c;
+  --border:#e7e5e4;--border-thick:#44403c;
+  --cell-given:#1c1917;--cell-user:#2563eb;--cell-selected:#d1fae5;
+  --cell-related:#f5f5f4;--cell-same-num:#ccfbf1;--cell-conflict:#fecaca;
+  --cell-error-text:#dc2626;
+  --radius:8px;--shadow:0 1px 3px rgba(0,0,0,0.1);
+}
+html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);-webkit-tap-highlight-color:transparent;overflow-x:hidden}
+body{display:flex;flex-direction:column;min-height:100vh}
+
+/* Header */
+.header{background:var(--bg-white);border-bottom:1px solid var(--border);padding:8px 12px;position:sticky;top:0;z-index:50;box-shadow:var(--shadow)}
+.header-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.logo{font-size:1.3rem;font-weight:800;color:var(--primary);letter-spacing:-0.5px}
+.timer-box{display:flex;align-items:center;gap:6px;background:var(--bg);border-radius:20px;padding:4px 10px;font-size:0.85rem;font-variant-numeric:tabular-nums;font-weight:600}
+.timer-box button{background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:0.9rem;padding:2px;display:flex;align-items:center}
+.timer-box button:hover{color:var(--primary)}
+.header-btns{display:flex;gap:4px}
+.icon-btn{background:none;border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;color:var(--text-muted);width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-size:1rem;transition:all 0.15s}
+.icon-btn:hover{background:var(--primary-light);color:var(--primary);border-color:var(--primary)}
+.diff-row{display:flex;gap:4px}
+.diff-btn{flex:1;padding:5px 4px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-white);cursor:pointer;font-size:0.7rem;font-weight:600;color:var(--text-muted);transition:all 0.15s;text-align:center;white-space:nowrap}
+.diff-btn:hover{border-color:var(--primary);color:var(--primary)}
+.diff-btn.active{background:var(--primary);color:white;border-color:var(--primary)}
+
+/* Main */
+.main{flex:1;display:flex;flex-direction:column;align-items:center;padding:12px 8px;gap:12px;max-width:480px;margin:0 auto;width:100%}
+
+/* Grid */
+.grid-wrapper{background:var(--bg-white);border-radius:12px;box-shadow:var(--shadow);padding:6px;display:inline-block}
+.grid{display:grid;border:2px solid var(--border-thick);border-radius:4px;overflow:hidden}
+.cell{width:var(--cell-size);height:var(--cell-size);display:flex;align-items:center;justify-content:center;font-size:var(--cell-font);font-weight:700;cursor:pointer;position:relative;transition:background 0.1s;border:0.5px solid var(--border);background:var(--bg-white);user-select:none;-webkit-user-select:none}
+.cell.given{color:var(--cell-given);font-weight:800}
+.cell.user{color:var(--cell-user)}
+.cell.selected{background:var(--cell-selected)!important;z-index:2}
+.cell.related{background:var(--cell-related)}
+.cell.same-num{background:var(--cell-same-num)}
+.cell.conflict{background:var(--cell-conflict)!important;color:var(--cell-error-text)!important}
+.cell.hint-flash{animation:hintPulse 0.6s ease-in-out 2}
+@keyframes hintPulse{0%,100%{background:inherit}50%{background:var(--primary-light)}}
+
+/* Notes in cell */
+.cell-notes{display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);width:100%;height:100%;padding:1px}
+.cell-notes span{font-size:calc(var(--cell-font)*0.4);font-weight:500;color:var(--text-muted);display:flex;align-items:center;justify-content:center;line-height:1}
+
+/* Jigsaw region colors */
+.region-0{background:#f0fdf4!important}.region-1{background:#eff6ff!important}.region-2{background:#fefce8!important}.region-3{background:#fdf2f8!important}.region-4{background:#f5f3ff!important}
+
+/* Thick borders */
+.cell.border-right-thick{border-right:2px solid var(--border-thick)}
+.cell.border-bottom-thick{border-bottom:2px solid var(--border-thick)}
+.cell.border-left-thick{border-left:2px solid var(--border-thick)}
+.cell.border-top-thick{border-top:2px solid var(--border-thick)}
+
+/* Number Pad */
+.numpad{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;width:100%;max-width:360px}
+.num-btn{width:var(--num-btn-size);height:var(--num-btn-size);border-radius:var(--radius);border:1.5px solid var(--border);background:var(--bg-white);cursor:pointer;font-size:1.1rem;font-weight:700;color:var(--text);display:flex;flex-direction:column;align-items:center;justify-content:center;transition:all 0.15s;position:relative}
+.num-btn:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-light)}
+.num-btn:active{transform:scale(0.95)}
+.num-btn .count{font-size:0.55rem;color:var(--text-muted);font-weight:500;line-height:1}
+.num-btn.all-placed{opacity:0.35;pointer-events:none}
+
+.action-row{display:flex;gap:6px;justify-content:center;width:100%;max-width:360px}
+.action-btn{flex:1;height:40px;border-radius:var(--radius);border:1.5px solid var(--border);background:var(--bg-white);cursor:pointer;font-size:0.7rem;font-weight:600;color:var(--text-muted);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;transition:all 0.15s}
+.action-btn:hover{border-color:var(--primary);color:var(--primary)}
+.action-btn:active{transform:scale(0.95)}
+.action-btn.active{background:var(--primary-light);color:var(--primary);border-color:var(--primary)}
+.action-btn svg{width:16px;height:16px}
+
+/* Modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:100;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity 0.25s}
+.modal-overlay.show{opacity:1;pointer-events:auto}
+.modal{background:var(--bg-white);border-radius:16px;padding:24px;max-width:340px;width:90%;text-align:center;transform:scale(0.9);transition:transform 0.25s;box-shadow:0 20px 60px rgba(0,0,0,0.2)}
+.modal-overlay.show .modal{transform:scale(1)}
+.modal h2{font-size:1.4rem;font-weight:800;margin-bottom:8px}
+.modal p{color:var(--text-muted);font-size:0.85rem;line-height:1.5;margin-bottom:4px}
+.modal-btn{display:inline-block;margin-top:16px;padding:10px 28px;background:var(--primary);color:white;border:none;border-radius:var(--radius);font-size:0.9rem;font-weight:700;cursor:pointer;transition:background 0.15s}
+.modal-btn:hover{background:var(--primary-dark)}
+
+/* Win modal specifics */
+.win-icon{font-size:3rem;margin-bottom:8px}
+.win-time{font-size:1.1rem;font-weight:700;color:var(--primary);margin:8px 0}
+.win-diff{display:inline-block;background:var(--primary-light);color:var(--primary);padding:3px 12px;border-radius:12px;font-size:0.75rem;font-weight:600;margin-bottom:8px}
+
+/* How to play */
+.help-content{text-align:left;max-height:60vh;overflow-y:auto;padding-right:8px}
+.help-content h3{font-size:0.95rem;font-weight:700;margin:12px 0 4px;color:var(--primary)}
+.help-content p,.help-content li{font-size:0.8rem;color:var(--text-muted);line-height:1.6}
+.help-content ul{padding-left:16px}
+.help-content kbd{background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px;font-size:0.7rem;font-family:inherit}
+
+/* PWA install banner */
+.install-banner{position:fixed;bottom:0;left:0;right:0;background:var(--bg-white);border-top:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;justify-content:space-between;z-index:80;box-shadow:0 -2px 10px rgba(0,0,0,0.1);transform:translateY(100%);transition:transform 0.3s}
+.install-banner.show{transform:translateY(0)}
+.install-banner-text{font-size:0.8rem;font-weight:600}
+.install-banner-text small{display:block;color:var(--text-muted);font-weight:400;font-size:0.7rem}
+.install-banner-btns{display:flex;gap:8px}
+.install-banner-btns button{padding:6px 14px;border-radius:var(--radius);font-size:0.75rem;font-weight:600;cursor:pointer;border:none}
+.install-btn-yes{background:var(--primary);color:white}
+.install-btn-no{background:var(--bg);color:var(--text-muted);border:1px solid var(--border)!important}
+
+/* Confetti */
+.confetti-container{position:fixed;inset:0;pointer-events:none;z-index:99;overflow:hidden}
+.confetti-piece{position:absolute;width:10px;height:10px;top:-20px;animation:confettiFall linear forwards}
+@keyframes confettiFall{0%{transform:translateY(0) rotate(0deg);opacity:1}100%{transform:translateY(100vh) rotate(720deg);opacity:0}}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+
+/* Responsive sizing */
+@media(max-width:360px){
+  .diff-btn{font-size:0.6rem;padding:4px 2px}
+  .logo{font-size:1.1rem}
+}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="header">
+  <div class="header-top">
+    <span class="logo">MiniSudoku</span>
+    <div class="timer-box">
+      <button id="timerToggle" title="Pause/Resume timer">&#9208;</button>
+      <span id="timerDisplay">00:00</span>
+    </div>
+    <div class="header-btns">
+      <button class="icon-btn" id="newGameBtn" title="New Game">&#8635;</button>
+      <button class="icon-btn" id="helpBtn" title="How to Play">?</button>
+    </div>
+  </div>
+  <div class="diff-row">
+    <button class="diff-btn" data-diff="easy">4x4 Easy</button>
+    <button class="diff-btn active" data-diff="medium">5x5 Medium</button>
+    <button class="diff-btn" data-diff="hard">6x6 Hard</button>
+  </div>
+</header>
+
+<!-- Main -->
+<main class="main">
+  <div class="grid-wrapper">
+    <div class="grid" id="grid"></div>
+  </div>
+  <div class="numpad" id="numpad"></div>
+  <div class="action-row" id="actionRow"></div>
+</main>
+
+<!-- Win Modal -->
+<div class="modal-overlay" id="winModal">
+  <div class="modal">
+    <div class="win-icon">&#127881;</div>
+    <h2>Congratulations!</h2>
+    <div class="win-diff" id="winDiff"></div>
+    <div class="win-time" id="winTime"></div>
+    <p>You solved the puzzle!</p>
+    <button class="modal-btn" id="winNewGame">New Game</button>
+  </div>
+</div>
+
+<!-- Help Modal -->
+<div class="modal-overlay" id="helpModal">
+  <div class="modal" style="text-align:left">
+    <h2 style="text-align:center">How to Play</h2>
+    <div class="help-content" id="helpContent"></div>
+    <div style="text-align:center"><button class="modal-btn" id="helpClose">Got it!</button></div>
+  </div>
+</div>
+
+<!-- Install Banner -->
+<div class="install-banner" id="installBanner">
+  <div class="install-banner-text">
+    Install Mini Sudoku
+    <small id="installHint">Add to home screen for quick access</small>
+  </div>
+  <div class="install-banner-btns">
+    <button class="install-btn-no" id="installDismiss">Not now</button>
+    <button class="install-btn-yes" id="installAccept">Install</button>
+  </div>
+</div>
+
+<!-- Confetti Container -->
+<div class="confetti-container" id="confettiContainer"></div>
+
+<script>
+// ========== SUDOKU ENGINE ==========
+const JIGSAW_REGIONS = [
+  [0,0,1,1,1],
+  [0,0,1,2,2],
+  [3,0,1,2,2],
+  [3,3,4,4,2],
+  [3,3,4,4,4]
+];
+
+const CONFIGS = {
+  easy:   { size:4, boxRows:2, boxCols:2, regions:null },
+  medium: { size:5, boxRows:0, boxCols:0, regions:JIGSAW_REGIONS },
+  hard:   { size:6, boxRows:2, boxCols:3, regions:null }
+};
+
+const CELLS_TO_REMOVE = { easy:[7,9], medium:[12,14], hard:[20,22] };
+
+function createEmptyGrid(size) {
+  return Array.from({length:size}, ()=> Array(size).fill(null));
+}
+
+function cloneGrid(grid) {
+  return grid.map(r=>[...r]);
+}
+
+function shuffle(arr) {
+  const a = [...arr];
+  for(let i=a.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [a[i],a[j]]=[a[j],a[i]];
+  }
+  return a;
+}
+
+function isValid(grid, config, row, col, num) {
+  const size = config.size;
+  for(let c=0;c<size;c++) if(grid[row][c]===num) return false;
+  for(let r=0;r<size;r++) if(grid[r][col]===num) return false;
+  if(config.regions){
+    const rid=config.regions[row][col];
+    for(let r=0;r<size;r++) for(let c=0;c<size;c++) if(config.regions[r][c]===rid && grid[r][c]===num) return false;
+  } else {
+    const br=Math.floor(row/config.boxRows)*config.boxRows;
+    const bc=Math.floor(col/config.boxCols)*config.boxCols;
+    for(let r=br;r<br+config.boxRows;r++) for(let c=bc;c<bc+config.boxCols;c++) if(grid[r][c]===num) return false;
+  }
+  return true;
+}
+
+function generateCompleteGrid(config) {
+  const size=config.size;
+  const grid=createEmptyGrid(size);
+  const nums=Array.from({length:size},(_,i)=>i+1);
+  function fill(pos){
+    if(pos===size*size) return true;
+    const row=Math.floor(pos/size), col=pos%size;
+    const sn=shuffle(nums);
+    for(const num of sn){
+      if(isValid(grid,config,row,col,num)){
+        grid[row][col]=num;
+        if(fill(pos+1)) return true;
+        grid[row][col]=null;
+      }
+    }
+    return false;
+  }
+  // BUG FIX #6: Retry if generation fails (shouldn't happen but safety net)
+  for(let attempt=0; attempt<5; attempt++){
+    if(fill(0)) return grid;
+    // Reset grid and try again
+    for(let r=0;r<size;r++) for(let c=0;c<size;c++) grid[r][c]=null;
+  }
+  return grid;
+}
+
+function findEmpty(grid,size){
+  for(let r=0;r<size;r++) for(let c=0;c<size;c++) if(grid[r][c]===null) return [r,c];
+  return null;
+}
+
+function countSolutions(grid,config,limit){
+  limit=limit||2;
+  const size=config.size;
+  const empty=findEmpty(grid,size);
+  if(!empty) return 1;
+  const [row,col]=empty;
+  let count=0;
+  for(let num=1;num<=size;num++){
+    if(isValid(grid,config,row,col,num)){
+      grid[row][col]=num;
+      count+=countSolutions(grid,config,limit-count);
+      grid[row][col]=null;
+      if(count>=limit) return count;
+    }
+  }
+  return count;
+}
+
+function generatePuzzle(difficulty){
+  const config=CONFIGS[difficulty];
+  const size=config.size;
+  const solution=generateCompleteGrid(config);
+  const puzzle=cloneGrid(solution);
+  const [minRemove,maxRemove]=CELLS_TO_REMOVE[difficulty];
+  const toRemove=minRemove+Math.floor(Math.random()*(maxRemove-minRemove+1));
+  const positions=[];
+  for(let r=0;r<size;r++) for(let c=0;c<size;c++) positions.push([r,c]);
+  const shuffled=shuffle(positions);
+  let removed=0;
+  for(const [row,col] of shuffled){
+    if(removed>=toRemove) break;
+    const backup=puzzle[row][col];
+    puzzle[row][col]=null;
+    const testGrid=cloneGrid(puzzle);
+    if(countSolutions(testGrid,config)===1){
+      removed++;
+    } else {
+      puzzle[row][col]=backup;
+    }
+  }
+  return {puzzle,solution};
+}
+
+function getRegionCells(config,row,col){
+  const size=config.size;
+  const cells=[];
+  if(config.regions){
+    const rid=config.regions[row][col];
+    for(let r=0;r<size;r++) for(let c=0;c<size;c++) if(config.regions[r][c]===rid && (r!==row||c!==col)) cells.push([r,c]);
+  } else {
+    const br=Math.floor(row/config.boxRows)*config.boxRows;
+    const bc=Math.floor(col/config.boxCols)*config.boxCols;
+    for(let r=br;r<br+config.boxRows;r++) for(let c=bc;c<bc+config.boxCols;c++) if(r!==row||c!==col) cells.push([r,c]);
+  }
+  return cells;
+}
+
+function getRelatedCells(row,col,config){
+  const size=config.size;
+  const set=new Set();
+  for(let c=0;c<size;c++) if(c!==col) set.add(row+','+c);
+  for(let r=0;r<size;r++) if(r!==row) set.add(r+','+col);
+  for(const [r,c] of getRegionCells(config,row,col)) set.add(r+','+c);
+  return [...set].map(s=>{const p=s.split(',');return [+p[0],+p[1]];});
+}
+
+function getConflicts(board,row,col,config){
+  const val=board[row][col];
+  if(val===null) return [];
+  const size=config.size;
+  const conflicts=[];
+  for(let c=0;c<size;c++) if(c!==col && board[row][c]===val) conflicts.push([row,c]);
+  for(let r=0;r<size;r++) if(r!==row && board[r][col]===val) conflicts.push([r,col]);
+  for(const [r,c] of getRegionCells(config,row,col)) if(board[r][c]===val) conflicts.push([r,c]);
+  return conflicts;
+}
+
+function cellHasConflict(board,row,col,config){
+  return getConflicts(board,row,col,config).length>0;
+}
+
+function getSameNumberCells(board,row,col){
+  const val=board[row][col];
+  if(val===null) return [];
+  const cells=[];
+  for(let r=0;r<board.length;r++) for(let c=0;c<board[r].length;c++) if((r!==row||c!==col)&&board[r][c]===val) cells.push([r,c]);
+  return cells;
+}
+
+function getHint(board,solution){
+  const empty=[];
+  for(let r=0;r<board.length;r++) for(let c=0;c<board[r].length;c++) if(board[r][c]===null||board[r][c]!==solution[r][c]) empty.push([r,c]);
+  if(!empty.length) return null;
+  const [row,col]=empty[Math.floor(Math.random()*empty.length)];
+  return {row,col,value:solution[row][col]};
+}
+
+function isBoardComplete(board,solution){
+  for(let r=0;r<board.length;r++) for(let c=0;c<board[r].length;c++) if(board[r][c]!==solution[r][c]) return false;
+  return true;
+}
+
+function formatTime(seconds){
+  const m=Math.floor(seconds/60), s=seconds%60;
+  return m.toString().padStart(2,'0')+':'+s.toString().padStart(2,'0');
+}
+
+// ========== GAME STATE ==========
+let state = {
+  difficulty: 'medium',
+  puzzle: null,
+  solution: null,
+  board: null,
+  notes: null,
+  selectedCell: null,
+  notesMode: false,
+  timer: 0,
+  timerPaused: false,
+  timerInterval: null,
+  history: [],
+  completed: false
+};
+
+function createEmptyNotes(size){
+  return Array.from({length:size},()=>Array.from({length:size},()=>new Set()));
+}
+
+function newGame(difficulty){
+  if(state.timerInterval) clearInterval(state.timerInterval);
+  state.difficulty = difficulty || state.difficulty;
+  const {puzzle,solution} = generatePuzzle(state.difficulty);
+  state.puzzle = puzzle;
+  state.solution = solution;
+  state.board = cloneGrid(puzzle);
+  state.notes = createEmptyNotes(CONFIGS[state.difficulty].size);
+  state.selectedCell = null;
+  state.notesMode = false;
+  state.timer = 0;
+  state.timerPaused = false;
+  state.history = [];
+  state.completed = false;
+  startTimer();
+  renderAll();
+  saveState();
+}
+
+function startTimer(){
+  if(state.timerInterval) clearInterval(state.timerInterval);
+  state.timerInterval = setInterval(()=>{
+    if(!state.timerPaused && !state.completed){
+      state.timer++;
+      document.getElementById('timerDisplay').textContent = formatTime(state.timer);
+      if(state.timer % 10 === 0) saveState();
+    }
+  },1000);
+  document.getElementById('timerToggle').innerHTML = '&#9208;';
+}
+
+function toggleTimer(){
+  state.timerPaused = !state.timerPaused;
+  document.getElementById('timerToggle').innerHTML = state.timerPaused ? '&#9654;' : '&#9208;';
+}
+
+// BUG FIX #8: Pause timer when tab is hidden
+document.addEventListener('visibilitychange', ()=>{
+  if(document.hidden && !state.timerPaused && !state.completed){
+    state._autoPaused = true;
+    state.timerPaused = true;
+    document.getElementById('timerToggle').innerHTML = '&#9654;';
+  } else if(!document.hidden && state._autoPaused && !state.completed){
+    state._autoPaused = false;
+    state.timerPaused = false;
+    document.getElementById('timerToggle').innerHTML = '&#9208;';
+  }
+});
+
+// ========== CELL SIZING ==========
+function getCellSize(){
+  const size = CONFIGS[state.difficulty].size;
+  const vw = Math.min(window.innerWidth, 480);
+  const maxGrid = vw - 32 - 12;
+  const cellSize = Math.floor(maxGrid / size);
+  return Math.min(cellSize, size===4?80:size===5?68:58);
+}
+
+// ========== RENDERING ==========
+function renderAll(){
+  renderGrid();
+  renderNumpad();
+  renderActions();
+  updateDiffButtons();
+  document.getElementById('timerDisplay').textContent = formatTime(state.timer);
+}
+
+function renderGrid(){
+  const config = CONFIGS[state.difficulty];
+  const size = config.size;
+  const grid = document.getElementById('grid');
+  const cellSize = getCellSize();
+  const fontSize = Math.round(cellSize * 0.45);
+
+  grid.style.gridTemplateColumns = `repeat(${size}, ${cellSize}px)`;
+  grid.style.setProperty('--cell-size', cellSize+'px');
+  grid.style.setProperty('--cell-font', fontSize+'px');
+  grid.innerHTML = '';
+
+  const sel = state.selectedCell;
+  const relatedCells = sel ? getRelatedCells(sel[0],sel[1],config) : [];
+  const sameNumCells = sel && state.board[sel[0]][sel[1]]!==null ? getSameNumberCells(state.board,sel[0],sel[1]) : [];
+  const allConflicts = new Set();
+  if(sel){
+    const selConflicts = getConflicts(state.board,sel[0],sel[1],config);
+    selConflicts.forEach(([r,c])=>allConflicts.add(r+','+c));
+    if(cellHasConflict(state.board,sel[0],sel[1],config)) allConflicts.add(sel[0]+','+sel[1]);
+    for(const [r,c] of sameNumCells){
+      if(cellHasConflict(state.board,r,c,config)){
+        allConflicts.add(r+','+c);
+      }
+    }
+  }
+
+  const relatedSet = new Set(relatedCells.map(([r,c])=>r+','+c));
+  const sameNumSet = new Set(sameNumCells.map(([r,c])=>r+','+c));
+
+  for(let r=0;r<size;r++){
+    for(let c=0;c<size;c++){
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      cell.dataset.row = r;
+      cell.dataset.col = c;
+
+      const isGiven = state.puzzle[r][c] !== null;
+      const val = state.board[r][c];
+      const isSelected = sel && sel[0]===r && sel[1]===c;
+      const isRelated = !isSelected && relatedSet.has(r+','+c);
+      const isSameNum = !isSelected && sameNumSet.has(r+','+c);
+      const isConflict = allConflicts.has(r+','+c);
+
+      // Jigsaw region coloring
+      if(config.regions){
+        const rid = config.regions[r][c];
+        cell.classList.add('region-'+rid);
+      }
+
+      if(isGiven) cell.classList.add('given');
+      else if(val!==null) cell.classList.add('user');
+      if(isSelected) cell.classList.add('selected');
+      else if(isConflict) cell.classList.add('conflict');
+      else if(isSameNum) cell.classList.add('same-num');
+      else if(isRelated) cell.classList.add('related');
+
+      // Thick borders
+      if(config.regions){
+        if(c<size-1 && config.regions[r][c]!==config.regions[r][c+1]) cell.classList.add('border-right-thick');
+        if(r<size-1 && config.regions[r][c]!==config.regions[r+1][c]) cell.classList.add('border-bottom-thick');
+        if(c>0 && config.regions[r][c]!==config.regions[r][c-1]) cell.classList.add('border-left-thick');
+        if(r>0 && config.regions[r][c]!==config.regions[r-1][c]) cell.classList.add('border-top-thick');
+      } else {
+        if((c+1)%config.boxCols===0 && c<size-1) cell.classList.add('border-right-thick');
+        if((r+1)%config.boxRows===0 && r<size-1) cell.classList.add('border-bottom-thick');
+      }
+
+      // Content
+      if(val !== null){
+        cell.textContent = val;
+      } else if(state.notes[r][c].size > 0){
+        const notesDiv = document.createElement('div');
+        notesDiv.className = 'cell-notes';
+        const maxNum = size;
+        const cols = size <= 4 ? 2 : 3;
+        const rows = Math.ceil(maxNum / cols);
+        notesDiv.style.gridTemplateColumns = `repeat(${cols},1fr)`;
+        notesDiv.style.gridTemplateRows = `repeat(${rows},1fr)`;
+        for(let n=1;n<=maxNum;n++){
+          const span = document.createElement('span');
+          span.textContent = state.notes[r][c].has(n) ? n : '';
+          notesDiv.appendChild(span);
+        }
+        cell.appendChild(notesDiv);
+      }
+
+      cell.addEventListener('click', ()=> selectCell(r,c));
+      grid.appendChild(cell);
+    }
+  }
+}
+
+function renderNumpad(){
+  const size = CONFIGS[state.difficulty].size;
+  const numpad = document.getElementById('numpad');
+  numpad.innerHTML = '';
+
+  const counts = {};
+  for(let n=1;n<=size;n++) counts[n]=0;
+  for(let r=0;r<size;r++) for(let c=0;c<size;c++){
+    const v=state.board[r][c];
+    if(v!==null && counts[v]!==undefined) counts[v]++;
+  }
+
+  const btnSize = Math.min(48, (Math.min(window.innerWidth,480)-32-6*(size-1))/size);
+
+  for(let n=1;n<=size;n++){
+    const btn = document.createElement('button');
+    btn.className = 'num-btn';
+    btn.style.setProperty('--num-btn-size', btnSize+'px');
+    const remaining = size - (counts[n]||0);
+    btn.innerHTML = `<span>${n}</span><span class="count">${remaining}</span>`;
+    if(remaining <= 0) btn.classList.add('all-placed');
+    btn.addEventListener('click', ()=> placeNumber(n));
+    numpad.appendChild(btn);
+  }
+}
+
+function renderActions(){
+  const actionRow = document.getElementById('actionRow');
+  actionRow.innerHTML = '';
+
+  const actions = [
+    {icon:'\u21A9',label:'Undo',action:undo},
+    {icon:'\u270F',label:'Notes',action:toggleNotes,active:state.notesMode},
+    {icon:'\u232B',label:'Erase',action:eraseCell},
+    {icon:'\uD83D\uDCA1',label:'Hint',action:giveHint}
+  ];
+
+  for(const a of actions){
+    const btn = document.createElement('button');
+    btn.className = 'action-btn';
+    if(a.active) btn.classList.add('active');
+    btn.innerHTML = `<span style="font-size:1rem">${a.icon}</span>${a.label}`;
+    btn.addEventListener('click', a.action);
+    actionRow.appendChild(btn);
+  }
+}
+
+function updateDiffButtons(){
+  document.querySelectorAll('.diff-btn').forEach(btn=>{
+    btn.classList.toggle('active', btn.dataset.diff===state.difficulty);
+  });
+}
+
+// ========== GAME ACTIONS ==========
+function selectCell(r,c){
+  if(state.completed) return;
+  state.selectedCell = [r,c];
+  renderGrid();
+}
+
+// BUG FIX #3 & #4: Proper history tracking with related notes cleanup
+function placeNumber(num){
+  if(!state.selectedCell || state.completed) return;
+  const [r,c] = state.selectedCell;
+  if(state.puzzle[r][c]!==null) return; // given cell
+
+  const config = CONFIGS[state.difficulty];
+
+  if(state.notesMode){
+    // BUG FIX #3: Single history entry for notes mode (was pushing TWO entries before)
+    const prevValue = state.board[r][c];
+    const prevNotes = new Set(state.notes[r][c]);
+
+    // If cell has a value, clear it first
+    if(state.board[r][c] !== null){
+      state.board[r][c] = null;
+    }
+
+    // Toggle the note
+    const newNotes = new Set(state.notes[r][c]);
+    if(newNotes.has(num)) newNotes.delete(num);
+    else newNotes.add(num);
+    state.notes[r][c] = newNotes;
+
+    // Single history entry that captures the full state change
+    state.history.push({
+      row:r, col:c,
+      prevValue: prevValue,
+      newValue: null,
+      prevNotes: prevNotes,
+      newNotes: new Set(newNotes),
+      relatedNotesChanges: [] // no related notes change in notes mode
+    });
+  } else {
+    const prevValue = state.board[r][c];
+    const prevNotes = new Set(state.notes[r][c]);
+
+    // BUG FIX #4: Track related notes that will be auto-removed
+    const relatedNotesChanges = [];
+    const related = getRelatedCells(r,c,config);
+    for(const [rr,cc] of related){
+      if(state.notes[rr][cc].has(num)){
+        relatedNotesChanges.push({row:rr, col:cc, removedNote:num});
+        state.notes[rr][cc].delete(num);
+      }
+    }
+
+    state.board[r][c] = num;
+    state.notes[r][c] = new Set(); // clear notes when placing number
+
+    state.history.push({
+      row:r, col:c,
+      prevValue: prevValue,
+      newValue: num,
+      prevNotes: prevNotes,
+      newNotes: new Set(),
+      relatedNotesChanges: relatedNotesChanges
+    });
+  }
+
+  renderGrid();
+  renderNumpad();
+
+  // Check win
+  if(isBoardComplete(state.board, state.solution)){
+    state.completed = true;
+    clearInterval(state.timerInterval);
+    setTimeout(showWin, 300);
+  }
+  saveState();
+}
+
+function eraseCell(){
+  if(!state.selectedCell || state.completed) return;
+  const [r,c] = state.selectedCell;
+  if(state.puzzle[r][c]!==null) return;
+  const prevValue = state.board[r][c];
+  const prevNotes = new Set(state.notes[r][c]);
+  if(prevValue===null && prevNotes.size===0) return;
+  state.board[r][c] = null;
+  state.notes[r][c] = new Set();
+  state.history.push({
+    row:r, col:c,
+    prevValue: prevValue,
+    newValue: null,
+    prevNotes: prevNotes,
+    newNotes: new Set(),
+    relatedNotesChanges: []
+  });
+  renderGrid();
+  renderNumpad();
+  saveState();
+}
+
+function toggleNotes(){
+  state.notesMode = !state.notesMode;
+  renderActions();
+}
+
+// BUG FIX #4: Undo now restores related notes that were auto-removed
+function undo(){
+  if(state.history.length===0 || state.completed) return;
+  const entry = state.history.pop();
+  state.board[entry.row][entry.col] = entry.prevValue;
+  state.notes[entry.row][entry.col] = new Set(entry.prevNotes);
+
+  // Restore related notes that were auto-removed when placing a number
+  if(entry.relatedNotesChanges){
+    for(const change of entry.relatedNotesChanges){
+      state.notes[change.row][change.col].add(change.removedNote);
+    }
+  }
+
+  renderGrid();
+  renderNumpad();
+  saveState();
+}
+
+function giveHint(){
+  if(state.completed) return;
+  const hint = getHint(state.board, state.solution);
+  if(!hint) return;
+  const {row,col,value} = hint;
+  const prevValue = state.board[row][col];
+  const prevNotes = new Set(state.notes[row][col]);
+
+  // BUG FIX #4: Track related notes changes for hints too
+  const config = CONFIGS[state.difficulty];
+  const relatedNotesChanges = [];
+  const related = getRelatedCells(row,col,config);
+  for(const [rr,cc] of related){
+    if(state.notes[rr][cc].has(value)){
+      relatedNotesChanges.push({row:rr, col:cc, removedNote:value});
+      state.notes[rr][cc].delete(value);
+    }
+  }
+
+  state.board[row][col] = value;
+  state.notes[row][col] = new Set();
+  state.history.push({
+    row, col,
+    prevValue,
+    newValue: value,
+    prevNotes,
+    newNotes: new Set(),
+    relatedNotesChanges
+  });
+
+  state.selectedCell = [row,col];
+  renderGrid();
+  renderNumpad();
+
+  // Flash animation
+  setTimeout(()=>{
+    const cell = document.querySelector(`.cell[data-row="${row}"][data-col="${col}"]`);
+    if(cell) cell.classList.add('hint-flash');
+  },50);
+
+  // Check win
+  if(isBoardComplete(state.board, state.solution)){
+    state.completed = true;
+    clearInterval(state.timerInterval);
+    setTimeout(showWin, 300);
+  }
+  saveState();
+}
+
+// ========== WIN ==========
+function showWin(){
+  document.getElementById('winDiff').textContent = state.difficulty.charAt(0).toUpperCase()+state.difficulty.slice(1)+' ('+CONFIGS[state.difficulty].size+'x'+CONFIGS[state.difficulty].size+')';
+  document.getElementById('winTime').textContent = formatTime(state.timer);
+  document.getElementById('winModal').classList.add('show');
+  launchConfetti();
+  localStorage.removeItem('miniSudokuState');
+}
+
+function launchConfetti(){
+  const container = document.getElementById('confettiContainer');
+  container.innerHTML = '';
+  const colors = ['#10b981','#f59e0b','#ef4444','#3b82f6','#8b5cf6','#ec4899','#06b6d4'];
+  for(let i=0;i<80;i++){
+    const piece = document.createElement('div');
+    piece.className = 'confetti-piece';
+    piece.style.left = Math.random()*100+'%';
+    piece.style.background = colors[Math.floor(Math.random()*colors.length)];
+    piece.style.width = (5+Math.random()*10)+'px';
+    piece.style.height = (5+Math.random()*10)+'px';
+    piece.style.borderRadius = Math.random()>0.5?'50%':'2px';
+    piece.style.animationDuration = (2+Math.random()*3)+'s';
+    piece.style.animationDelay = Math.random()*0.5+'s';
+    container.appendChild(piece);
+  }
+  setTimeout(()=>container.innerHTML='', 5000);
+}
+
+// ========== HELP ==========
+function showHelp(){
+  const size = CONFIGS[state.difficulty].size;
+  let rules = '';
+  if(size===4){
+    rules = `<h3>4x4 Sudoku Rules</h3>
+    <ul>
+      <li>Fill each row with numbers 1-4 (no repeats)</li>
+      <li>Fill each column with numbers 1-4 (no repeats)</li>
+      <li>Fill each 2x2 box with numbers 1-4 (no repeats)</li>
+    </ul>`;
+  } else if(size===5){
+    rules = `<h3>5x5 Jigsaw Sudoku Rules</h3>
+    <ul>
+      <li>Fill each row with numbers 1-5 (no repeats)</li>
+      <li>Fill each column with numbers 1-5 (no repeats)</li>
+      <li>Fill each <strong>colored region</strong> with numbers 1-5 (no repeats)</li>
+      <li>Regions are irregular shapes instead of boxes</li>
+    </ul>`;
+  } else {
+    rules = `<h3>6x6 Sudoku Rules</h3>
+    <ul>
+      <li>Fill each row with numbers 1-6 (no repeats)</li>
+      <li>Fill each column with numbers 1-6 (no repeats)</li>
+      <li>Fill each 2x3 box with numbers 1-6 (no repeats)</li>
+    </ul>`;
+  }
+  document.getElementById('helpContent').innerHTML = rules + `
+    <h3>Controls</h3>
+    <ul>
+      <li>Click a cell to select it, then click a number to place it</li>
+      <li>Use <strong>Notes</strong> mode to add pencil marks</li>
+      <li><strong>Erase</strong> removes a number or notes from a cell</li>
+      <li><strong>Hint</strong> reveals a random empty cell</li>
+      <li><strong>Undo</strong> reverses your last action</li>
+    </ul>
+    <h3>Keyboard Shortcuts</h3>
+    <ul>
+      <li><kbd>1</kbd>-<kbd>${size}</kbd> - Place number</li>
+      <li><kbd>Left</kbd><kbd>Up</kbd><kbd>Down</kbd><kbd>Right</kbd> - Move selection</li>
+      <li><kbd>Delete</kbd> / <kbd>Backspace</kbd> - Erase</li>
+      <li><kbd>N</kbd> - Toggle notes</li>
+      <li><kbd>Ctrl+Z</kbd> - Undo</li>
+      <li><kbd>H</kbd> - Hint</li>
+    </ul>`;
+  document.getElementById('helpModal').classList.add('show');
+}
+
+// ========== PERSISTENCE ==========
+function saveState(){
+  try {
+    const save = {
+      difficulty: state.difficulty,
+      puzzle: state.puzzle,
+      solution: state.solution,
+      board: state.board,
+      notes: state.notes.map(row=>row.map(s=>[...s])),
+      selectedCell: state.selectedCell,
+      notesMode: state.notesMode,
+      timer: state.timer,
+      timerPaused: state.timerPaused,
+      history: state.history.map(h=>({
+        row: h.row,
+        col: h.col,
+        prevValue: h.prevValue,
+        newValue: h.newValue,
+        prevNotes:[...h.prevNotes],
+        newNotes:[...h.newNotes],
+        relatedNotesChanges: (h.relatedNotesChanges||[]).map(c=>({row:c.row,col:c.col,removedNote:c.removedNote}))
+      })),
+      completed: state.completed
+    };
+    localStorage.setItem('miniSudokuState', JSON.stringify(save));
+  } catch(e){}
+}
+
+function loadState(){
+  try {
+    const raw = localStorage.getItem('miniSudokuState');
+    if(!raw) return false;
+    const save = JSON.parse(raw);
+    // BUG FIX #9: Validate loaded data structure
+    if(!save.puzzle || !save.solution || !save.board || !save.difficulty) return false;
+    if(!CONFIGS[save.difficulty]) return false;
+
+    state.difficulty = save.difficulty;
+    state.puzzle = save.puzzle;
+    state.solution = save.solution;
+    state.board = save.board;
+    state.notes = save.notes.map(row=>row.map(a=>new Set(a)));
+    state.selectedCell = save.selectedCell;
+    state.notesMode = save.notesMode;
+    state.timer = save.timer;
+    state.timerPaused = save.timerPaused;
+    state.history = save.history.map(h=>({
+      row: h.row,
+      col: h.col,
+      prevValue: h.prevValue,
+      newValue: h.newValue,
+      prevNotes: new Set(h.prevNotes),
+      newNotes: new Set(h.newNotes),
+      relatedNotesChanges: (h.relatedNotesChanges||[]).map(c=>({row:c.row,col:c.col,removedNote:c.removedNote}))
+    }));
+    state.completed = save.completed;
+    return true;
+  } catch(e){
+    // BUG FIX #9: Clear corrupted state
+    localStorage.removeItem('miniSudokuState');
+    return false;
+  }
+}
+
+// ========== KEYBOARD ==========
+document.addEventListener('keydown', e=>{
+  if(state.completed) return;
+  const size = CONFIGS[state.difficulty].size;
+  const key = e.key;
+
+  // Don't handle keyboard when typing in an input
+  if(e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+  // Number keys
+  if(key>='1' && key<=String(size)){
+    placeNumber(parseInt(key));
+    return;
+  }
+
+  // Arrow keys
+  if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(key)){
+    e.preventDefault();
+    if(!state.selectedCell){
+      state.selectedCell=[0,0];
+    } else {
+      let [r,c] = state.selectedCell;
+      if(key==='ArrowUp') r=Math.max(0,r-1);
+      if(key==='ArrowDown') r=Math.min(size-1,r+1);
+      if(key==='ArrowLeft') c=Math.max(0,c-1);
+      if(key==='ArrowRight') c=Math.min(size-1,c+1);
+      state.selectedCell=[r,c];
+    }
+    renderGrid();
+    return;
+  }
+
+  if(key==='Delete'||key==='Backspace'){
+    e.preventDefault();
+    eraseCell();
+    return;
+  }
+  if(key==='n'||key==='N'){
+    toggleNotes();
+    return;
+  }
+  if(key==='z'&&(e.ctrlKey||e.metaKey)){
+    e.preventDefault();
+    undo();
+    return;
+  }
+  if(key==='h'||key==='H'){
+    giveHint();
+    return;
+  }
+});
+
+// ========== EVENT LISTENERS ==========
+document.querySelectorAll('.diff-btn').forEach(btn=>{
+  btn.addEventListener('click',()=> newGame(btn.dataset.diff));
+});
+
+document.getElementById('newGameBtn').addEventListener('click',()=> newGame());
+document.getElementById('timerToggle').addEventListener('click', toggleTimer);
+document.getElementById('helpBtn').addEventListener('click', showHelp);
+document.getElementById('helpClose').addEventListener('click',()=> document.getElementById('helpModal').classList.remove('show'));
+document.getElementById('winNewGame').addEventListener('click',()=>{
+  document.getElementById('winModal').classList.remove('show');
+  newGame();
+});
+
+// Close modals on overlay click
+['winModal','helpModal'].forEach(id=>{
+  document.getElementById(id).addEventListener('click', e=>{
+    if(e.target.classList.contains('modal-overlay')) e.target.classList.remove('show');
+  });
+});
+
+// Resize
+window.addEventListener('resize',()=>{ if(state.puzzle) renderGrid(); });
+
+// ========== PWA ==========
+// BUG FIX #1 & #2: Use proper file-based manifest and service worker instead of blob URLs
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('./sw.js').then(reg=>{
+    console.log('SW registered:', reg.scope);
+  }).catch(err=>{
+    console.log('SW registration failed:', err);
+  });
+}
+
+// PWA install prompt
+let deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', e=>{
+  e.preventDefault();
+  deferredPrompt = e;
+  showInstallBanner();
+});
+
+function showInstallBanner(){
+  const banner = document.getElementById('installBanner');
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+  if(isIOS){
+    document.getElementById('installHint').textContent = 'Tap Share then Add to Home Screen';
+    document.getElementById('installAccept').textContent = 'Got it';
+  }
+  banner.classList.add('show');
+}
+
+document.getElementById('installDismiss').addEventListener('click',()=>{
+  document.getElementById('installBanner').classList.remove('show');
+});
+
+document.getElementById('installAccept').addEventListener('click',()=>{
+  if(deferredPrompt){
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.then(()=>{
+      deferredPrompt=null;
+    });
+  }
+  document.getElementById('installBanner').classList.remove('show');
+});
+
+// Show iOS hint if applicable
+if(/iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream && !window.navigator.standalone){
+  setTimeout(()=> showInstallBanner(), 3000);
+}
+
+// ========== INIT ==========
+(function init(){
+  if(!loadState()){
+    newGame('medium');
+  } else {
+    if(state.completed){
+      localStorage.removeItem('miniSudokuState');
+      newGame(state.difficulty);
+    } else {
+      startTimer();
+      renderAll();
+    }
+  }
+})();
+</script>
+</body>
+</html>
